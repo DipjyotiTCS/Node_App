@@ -43,11 +43,11 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const truncateWords = (text: string | null | undefined, limit = 50) => {
+const truncateWords = (text: string | null | undefined, limit = 30) => {
   if (!text) return "";
   const words = text.trim().split(/\s+/);
   if (words.length <= limit) return text;
-  return words.slice(0, limit).join(" ") + "…";
+  return words.slice(0, limit).join(" ");
 };
 
 /**
@@ -84,8 +84,24 @@ export function calculateDescrepency(
   }
 }
 
-const formatPercentage = (value: number) => {
-  return `${value.toFixed(3)}%`;
+//const formatPercentage = (value: number) => {
+//  return `${value.toFixed(3)}`;
+//};
+
+const formatPercentage = (value: number | string | null | undefined) => {
+  if (value === null || value === undefined) return "";
+
+  const num = Number(value);
+
+  if (isNaN(num)) return value + "";
+
+  let formatted = num.toString();
+
+  // Force decimal form for cases like 0.300 that may appear as "0.3" automatically
+  formatted = num.toFixed(6);         
+  formatted = formatted.replace(/\.?0+$/, "");  // remove trailing zeros + dot if empty
+
+  return formatted;
 };
 
 const RoyaltyTable: React.FC<RoyaltyTableProps> = ({ data }) => {
@@ -512,24 +528,24 @@ const RoyaltyTable: React.FC<RoyaltyTableProps> = ({ data }) => {
                     />
                   </TableHead>
                   <TableHead className="font-semibold">Royalty Head</TableHead>
-                  <TableHead className="text-right font-semibold">
-                    Royalty Rate (DB)
+                  <TableHead className="text-center font-semibold">
+                    Royalty Rate (DB) (%)
                   </TableHead>
-                  <TableHead className="text-right font-semibold">
+                  <TableHead className="text-center font-semibold">
                     Sales Amount
                   </TableHead>
-                  <TableHead className="text-right font-semibold">
-                    Royalty Amount (DB Rate)
+                  <TableHead className="text-center font-semibold">
+                    Royalty Amount (DB)
                   </TableHead>
                   {showReconciliation && (
                     <>
-                      <TableHead className="text-right font-semibold">
-                        Latest Royalty Rate
+                      <TableHead className="text-center font-semibold">
+                        Latest Royalty Rate (%)
                       </TableHead>
-                      <TableHead className="text-right font-semibold">
+                      <TableHead className="text-center font-semibold">
                         Royalty Amount (Latest)
                       </TableHead>
-                      <TableHead className="font-semibold">
+                      <TableHead className="text-center font-semibold">
                         Probable Reason for Discrepancy
                       </TableHead>
                     </>
@@ -561,64 +577,85 @@ const RoyaltyTable: React.FC<RoyaltyTableProps> = ({ data }) => {
                       <TableCell className="font-medium">
                         {row.royaltyHead}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-center font-mono">
                         {formatPercentage(row.databaseRate)}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-center font-mono">
                         {formatCurrency(row.salesAmount)}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-center font-mono">
                         {formatCurrency(row.calculatedRoyalty)}
                       </TableCell>
                       {showReconciliation && (
                         <>
+                          {/* Latest Royalty Rate */}
                           <TableCell
                             className={cn(
-                              "text-right font-mono",
-                              isDiscrepancy && "font-semibold text-warning"
+                              "text-center font-mono rounded-sm px-2",
+                              isDiscrepancy 
+                                ? "bg-warning-light/60 text-warning font-semibold" 
+                                : "bg-primary/5 text-foreground/90"
                             )}
                           >
-                            {formatPercentage(
-                              row.latestRate ?? row.databaseRate
-                            )}
+                            {formatPercentage(row.latestRate ?? row.databaseRate)}
                           </TableCell>
+
+                          {/* Latest Royalty Amount */}
                           <TableCell
                             className={cn(
-                              "text-right font-mono",
-                              isDiscrepancy && "font-semibold text-warning"
+                              "text-center font-mono rounded-sm px-2",
+                              isDiscrepancy 
+                                ? "bg-warning-light/60 text-warning font-semibold" 
+                                : "bg-primary/5 text-foreground/90"
                             )}
                           >
                             {formatCurrency(
-                              row.latestCalculatedRoyalty ??
-                                row.calculatedRoyalty
+                              row.latestCalculatedRoyalty ?? row.calculatedRoyalty
                             )}
                           </TableCell>
-                          <TableCell className="max-w-xs">
-                            {isDiscrepancy ? (
-                              <button
-                                type="button"
-                                className="flex w-full items-start gap-2 text-left hover:underline"
-                                onClick={() => {
-                                  if (row.discrepancyReason) {
-                                    setActiveReason({
-                                      royaltyHead: row.royaltyHead,
-                                      text: row.discrepancyReason,
-                                    });
-                                    setReasonModalOpen(true);
-                                  }
-                                }}
-                              >
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                                <span className="text-sm text-warning">
-                                  {truncateWords(row.discrepancyReason, 70)}
-                                </span>
-                              </button>
-                            ) : (
+                          <TableCell
+                            className={cn(
+                              "max-w-xs rounded-sm px-2",
+                              isDiscrepancy
+                                ? "bg-warning-light/60 text-warning"
+                                : "bg-primary/5 text-foreground/90"
+                            )}
+                          >
+                            {isDiscrepancy ? (() => {
+                              const wordLimit = 30;
+                              const fullText = row.discrepancyReason ?? "";
+                              const words = fullText.trim() ? fullText.trim().split(/\s+/) : [];
+                              const isTruncated = words.length > wordLimit;
+
+                              const truncatedCore = truncateWords(fullText, wordLimit);
+                              const displayText = isTruncated
+                                ? `${truncatedCore}... more`
+                                : truncatedCore;
+
+                              const handleClick = () => {
+                                if (!fullText) return;
+                                setActiveReason({
+                                  royaltyHead: row.royaltyHead,
+                                  text: fullText,
+                                });
+                                setReasonModalOpen(true);
+                              };
+
+                              return (
+                                <div className="flex w-full items-start gap-2 text-left">
+                                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                                  <span
+                                    className="text-sm cursor-pointer"
+                                    onClick={handleClick}
+                                  >
+                                    {displayText}
+                                  </span>
+                                </div>
+                              );
+                            })() : (
                               <div className="flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 text-success" />
-                                <span className="text-sm text-success">
-                                  No discrepancy
-                                </span>
+                                <span className="text-sm text-success">No discrepancy</span>
                               </div>
                             )}
                           </TableCell>
@@ -631,27 +668,27 @@ const RoyaltyTable: React.FC<RoyaltyTableProps> = ({ data }) => {
                 <TableRow className="border-t-2 border-primary/20 bg-primary/5 font-semibold hover:bg-primary/10">
                   <TableCell className="w-10"></TableCell>
                   <TableCell className="font-bold">Total</TableCell>
-                  <TableCell className="text-right">—</TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="text-center">—</TableCell>
+                  <TableCell className="text-center font-mono">
                     {formatCurrency(totals.salesAmount)}
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="text-center font-mono">
                     {formatCurrency(totals.calculatedRoyalty)}
                   </TableCell>
                   {showReconciliation && (
                     <>
-                      <TableCell className="text-right">—</TableCell>
+                      <TableCell className="text-center">—</TableCell>
                       <TableCell
                         className={cn(
-                          "text-right font-mono",
+                          "text-center font-mono",
                           totalDifference !== 0 && "text-warning"
                         )}
                       >
                         {formatCurrency(latestTotals.calculatedRoyalty)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         {totalDifference !== 0 && (
-                          <span className="text-sm font-medium text-warning">
+                          <span className="text-sm font-medium text-warning text-center">
                             Difference: {formatCurrency(totalDifference)}
                           </span>
                         )}
